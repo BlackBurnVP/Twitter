@@ -46,24 +46,27 @@ class LoginActivity : AppCompatActivity() {
         ivPersonImage.setOnClickListener{
             checkPermission()
         }
+
+        btnLogin.setOnClickListener(login)
     }
 
     val login = View.OnClickListener {
         loginToFirebase(edEmail.text.toString(),edPassword.text.toString())
     }
+
     private fun loginToFirebase(email:String,password:String){
         mAuth!!.createUserWithEmailAndPassword(email,password)
             .addOnCompleteListener(this){task ->
                 if(task.isSuccessful){
                     Toast.makeText(this,"Successful login",Toast.LENGTH_SHORT).show()
-                    val currentUser = mAuth!!.currentUser
+                    saveImageInFirebase()
                 }else{
                     Toast.makeText(this,"Failed to login",Toast.LENGTH_SHORT).show()
                 }
             }
     }
 
-    fun saveImageInFirebase(){
+    private fun saveImageInFirebase(){
         val currentUser = mAuth!!.currentUser
         val df = SimpleDateFormat("ddMMyyHHmmss")
         val imagePath = df.format(Date())+".jpg"
@@ -82,12 +85,17 @@ class LoginActivity : AppCompatActivity() {
             var downloadUrl = imageRef.downloadUrl.toString()
 
             myRef.child("Users").child(currentUser!!.uid).child("email").setValue(currentUser.email)
-            myRef.child("Users").child(currentUser!!.uid).child("ProfileImage").setValue(currentUser.email)
+            myRef.child("Users").child(currentUser!!.uid).child("ProfileImage").setValue(downloadUrl)
             loadTweet()
         }
     }
 
-    fun loadTweet(){
+    override fun onStart() {
+        super.onStart()
+        loadTweet()
+    }
+
+    private fun loadTweet(){
         val currentUser = mAuth!!.currentUser
         if(currentUser!=null){
             val intent = Intent(this,MainActivity::class.java)
