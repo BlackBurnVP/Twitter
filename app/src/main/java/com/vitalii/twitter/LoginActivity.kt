@@ -21,7 +21,6 @@ import com.google.firebase.storage.StorageReference
 import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
 import java.util.*
-import com.google.firebase.database.DatabaseReference
 import com.google.firebase.database.FirebaseDatabase
 
 
@@ -32,8 +31,8 @@ class LoginActivity : AppCompatActivity() {
     private var mAuth:FirebaseAuth? = null
     private var mFirebaseAnalytics:FirebaseAnalytics? = null
     private var mStorageRef: StorageReference? = null
-    var database = FirebaseDatabase.getInstance()
-    var myRef = database.getReference("message")
+    private var database = FirebaseDatabase.getInstance()
+    private var myRef = database.getReference("message")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,7 +49,7 @@ class LoginActivity : AppCompatActivity() {
         btnLogin.setOnClickListener(login)
     }
 
-    val login = View.OnClickListener {
+    private val login = View.OnClickListener {
         loginToFirebase(edEmail.text.toString(),edPassword.text.toString())
     }
 
@@ -68,34 +67,39 @@ class LoginActivity : AppCompatActivity() {
 
     private fun saveImageInFirebase(){
         val currentUser = mAuth!!.currentUser
-        val df = SimpleDateFormat("ddMMyyHHmmss")
-        val imagePath = df.format(Date())+".jpg"
-        val imageRef = mStorageRef!!.child("images/$imagePath")
-        ivPersonImage.isDrawingCacheEnabled = true
-        ivPersonImage.buildDrawingCache()
-        val drawable = ivPersonImage.drawable as BitmapDrawable
-        val bitmap = drawable.bitmap
-        val baos = ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.JPEG,100,baos)
-        val data = baos.toByteArray()
-        val uploadTask = imageRef.putBytes(data)
-        uploadTask.addOnFailureListener{
+        if (ivPersonImage.drawable.constantState != resources.getDrawable(R.drawable.persoicon).constantState){
+            val df = SimpleDateFormat("ddMMyyHHmmss")
+            val imagePath = df.format(Date())+".jpg"
+            val imageRef = mStorageRef!!.child("images/$imagePath")
+            ivPersonImage.isDrawingCacheEnabled = true
+            ivPersonImage.buildDrawingCache()
+            val drawable = ivPersonImage.drawable as BitmapDrawable
+            val bitmap = drawable.bitmap
+            val baos = ByteArrayOutputStream()
+            bitmap.compress(Bitmap.CompressFormat.JPEG,100,baos)
+            val data = baos.toByteArray()
+            val uploadTask = imageRef.putBytes(data)
+            uploadTask.addOnFailureListener{
 
-        }.addOnSuccessListener {taskSnapshot ->
-            var downloadUrl = imageRef.downloadUrl.toString()
+            }.addOnSuccessListener {taskSnapshot ->
+                val downloadUrl = imageRef.downloadUrl.toString()
 
+                myRef.child("Users").child(currentUser!!.uid).child("email").setValue(currentUser.email)
+                myRef.child("Users").child(currentUser!!.uid).child("ProfileImage").setValue(downloadUrl)
+            }
+        }else{
             myRef.child("Users").child(currentUser!!.uid).child("email").setValue(currentUser.email)
-            myRef.child("Users").child(currentUser!!.uid).child("ProfileImage").setValue(downloadUrl)
-            loadTweet()
+            myRef.child("Users").child(currentUser!!.uid).child("ProfileImage").setValue("gs://twitter-c0cc9.appspot.com/images/persoicon.png")
         }
+        toMain()
     }
 
     override fun onStart() {
         super.onStart()
-        loadTweet()
+        toMain()
     }
 
-    private fun loadTweet(){
+    private fun toMain(){
         val currentUser = mAuth!!.currentUser
         if(currentUser!=null){
             val intent = Intent(this,MainActivity::class.java)
@@ -105,7 +109,7 @@ class LoginActivity : AppCompatActivity() {
         }
     }
 
-    val READIMAGE = 123
+    private val READIMAGE = 123
     private fun checkPermission(){
         if (Build.VERSION.SDK_INT>=23){
             if(ActivityCompat.checkSelfPermission(this,android.Manifest.permission.READ_EXTERNAL_STORAGE)!=PackageManager.PERMISSION_GRANTED){
@@ -128,7 +132,7 @@ class LoginActivity : AppCompatActivity() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
     }
 
-    val PICK_IMAGE_CODE = 123
+    private val PICK_IMAGE_CODE = 123
     private fun loadImage(){
         val intent = Intent(Intent.ACTION_PICK,android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
         startActivityForResult(intent,PICK_IMAGE_CODE)
