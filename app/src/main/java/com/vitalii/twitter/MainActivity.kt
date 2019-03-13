@@ -30,6 +30,7 @@ import kotlin.collections.HashMap
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdView
 import com.google.android.gms.ads.MobileAds
+import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.android.synthetic.main.ads_tweet.view.*
 
 
@@ -51,6 +52,8 @@ class MainActivity : AppCompatActivity() {
         mStorageRef = FirebaseStorage.getInstance().getReferenceFromUrl("gs://twitter-c0cc9.appspot.com")
 
         MobileAds.initialize(this,"ca-app-pub-7140796069074516~4040324116")
+
+        FirebaseMessaging.getInstance().subscribeToTopic("news")
 
         val bundle = intent.extras
         myEmail = bundle!!.getString("email")!!
