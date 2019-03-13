@@ -1,7 +1,9 @@
 package com.vitalii.twitter
 
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -32,7 +34,7 @@ class LoginActivity : AppCompatActivity() {
     private var mFirebaseAnalytics:FirebaseAnalytics? = null
     private var mStorageRef: StorageReference? = null
     private var database = FirebaseDatabase.getInstance()
-    private var myRef = database.getReference("message")
+    private var myRef = database.reference
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

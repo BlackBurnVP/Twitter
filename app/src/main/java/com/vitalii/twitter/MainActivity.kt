@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.drawable.BitmapDrawable
 import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
 import android.provider.MediaStore
@@ -18,18 +17,21 @@ import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
 import com.google.firebase.storage.FirebaseStorage
 import com.google.firebase.storage.StorageReference
-import kotlinx.android.synthetic.main.activity_login.*
 import kotlinx.android.synthetic.main.activity_main.*
 import kotlinx.android.synthetic.main.add_tweet.*
 import kotlinx.android.synthetic.main.add_tweet.view.*
-import kotlinx.android.synthetic.main.item_tweet.*
 import kotlinx.android.synthetic.main.item_tweet.view.*
 import java.io.ByteArrayOutputStream
 import java.lang.Exception
 import java.net.URL
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Date
 import kotlin.collections.HashMap
+import com.google.android.gms.ads.AdRequest
+import com.google.android.gms.ads.AdView
+import com.google.android.gms.ads.MobileAds
+import kotlinx.android.synthetic.main.ads_tweet.view.*
+
 
 class MainActivity : AppCompatActivity() {
 
@@ -40,11 +42,15 @@ class MainActivity : AppCompatActivity() {
     private var database= FirebaseDatabase.getInstance()
     private var mStorageRef: StorageReference? = null
     private var myRef=database.reference
+    private lateinit var mAdView: AdView
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         mStorageRef = FirebaseStorage.getInstance().getReferenceFromUrl("gs://twitter-c0cc9.appspot.com")
+
+        MobileAds.initialize(this,"ca-app-pub-7140796069074516~4040324116")
 
         val bundle = intent.extras
         myEmail = bundle!!.getString("email")!!
@@ -59,8 +65,8 @@ class MainActivity : AppCompatActivity() {
         tweetsList.add(Tweet("Some tweet", "url", "add"))
     }
 
-    val PICK_IMAGE_CODE = 123
-    private fun loadImage(){
+    private val PICK_IMAGE_CODE = 123
+    fun loadImage(){
         val intent = Intent(Intent.ACTION_PICK,android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
         startActivityForResult(intent,PICK_IMAGE_CODE)
     }
@@ -79,8 +85,10 @@ class MainActivity : AppCompatActivity() {
         super.onActivityResult(requestCode, resultCode, data)
     }
 
-    var downloadURL:String? = null
+    private var downloadURL:String? = null
     private fun uploadImage(bitmap: Bitmap){
+        tweetsList.add(0, Tweet("","","loading"))
+        adapter.notifyDataSetChanged()
         val df = SimpleDateFormat("ddMMyyHHmmss")
         val imagePath = df.format(Date())+".jpg"
         val imageRef = mStorageRef!!.child("imagePost/$imagePath")
@@ -92,6 +100,8 @@ class MainActivity : AppCompatActivity() {
 
         }.addOnSuccessListener {taskSnapshot ->
             downloadURL = imageRef.downloadUrl.toString()
+            tweetsList.removeAt(0)
+            adapter.notifyDataSetChanged()
         }
     }
 
@@ -102,6 +112,7 @@ class MainActivity : AppCompatActivity() {
                     try {
                         tweetsList.clear()
                         tweetsList.add(Tweet("Some tweet", "url", "add"))
+                        tweetsList.add(Tweet("Some tweet", "url", "ads"))
                         val td = dataSnapshot.value as HashMap<String,Any>
                         for (key in td.keys){
                             var post = td[key] as HashMap<String,Any>
@@ -118,39 +129,77 @@ class MainActivity : AppCompatActivity() {
             })
     }
 
+    inner class TweetsAdapter(context: Context, var tweetsList: ArrayList<Tweet>):BaseAdapter() {
 
-    inner class TweetsAdapter(context: Context, var tweetsList: ArrayList<Tweet>) : BaseAdapter() {
-
-        private var context:Context? = context
+        private var context: Context? = context
 
         override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View {
             val myTweet = tweetsList[position]
 
-            if (myTweet.tweetPersonUID == "add"){
-                val myView = layoutInflater.inflate(R.layout.add_tweet,null)
-                myView.ivAttach.setOnClickListener {
-                    loadImage()
-                }
-                myView.ivPost.setOnClickListener {
-                    val tweetText = edTweet.text.toString()
-                    if (downloadURL==null){
-                        downloadURL = "No pic"
+            when(myTweet.tweetPersonUID){
+
+                "add" -> {
+                    val myView = layoutInflater.inflate(R.layout.add_tweet, null)
+                    myView.ivAttach.setOnClickListener {
+                        loadImage()
                     }
-                    myRef.child("Posts").push().setValue(Tweet(tweetText,downloadURL,myUID))
-                    myView.edTweet.setText("")
+                    myView.ivPost.setOnClickListener {
+                        val tweetText = edTweet.text.toString()
+                        if (downloadURL == null) {
+                            downloadURL = "No pic"
+                        }
+                        myRef.child("Posts").push().setValue(Tweet(tweetText, downloadURL, myUID!!))
+                        myView.edTweet.setText("")
+                    }
+                    return myView
                 }
-                return myView
-            }else{
-                val myView = layoutInflater.inflate(R.layout.item_tweet,null)
-                myView.txtTweetBody.text = myTweet.tweetText
-                myView.txtTweetUser.text = myTweet.tweetPersonUID
-                if (myTweet.tweetImageURL!="No pic"){
-                    //TODO: Use Picasa for load from URL
-                    val imageURL = URL(myTweet.tweetImageURL)
-                    val bmp = BitmapFactory.decodeStream(imageURL.openConnection().getInputStream())
-                    myView.ivTweetPic.setImageBitmap(bmp)
+
+                "loading" -> {
+                    return layoutInflater.inflate(R.layout.loading_tweet, null)
                 }
-                return myView
+
+                "ads" -> {
+                    val myView = layoutInflater.inflate(R.layout.ads_tweet, null)
+                    mAdView = myView.adView
+                    //TODO: Remove addTestDevice statement from production version
+                    val adRequest = AdRequest.Builder().addTestDevice("9916DEA341BF7D01F7D1B0D09D334F78").build()
+                    mAdView.loadAd(adRequest)
+                    return myView
+                }
+
+                else -> {
+                    val myView = layoutInflater.inflate(R.layout.item_tweet,null)
+                    myView.txtTweetBody.text = myTweet.tweetText
+                    if (myTweet.tweetImageURL!="No pic" && myTweet.tweetImageURL!!.isNotEmpty()){
+                        //TODO: Use Picasa for load from URL
+                        val imageURL = URL(myTweet.tweetImageURL)
+                        val bmp = BitmapFactory.decodeStream(imageURL.openConnection().getInputStream())
+                        myView.ivTweetPic.setImageBitmap(bmp)
+                    }
+
+                    myRef.child("Users").child(myTweet.tweetPersonUID)
+                        .addValueEventListener(object : ValueEventListener {
+                            override fun onDataChange(dataSnapshot: DataSnapshot) {
+                                try {
+                                    val td = dataSnapshot.value as HashMap<String,Any>
+                                    for (key in td.keys){
+                                        val userInfo = td[key] as String
+                                        if (key == "ProfileImage"){
+                                            val imageURL = URL(userInfo)
+                                            val bmp = BitmapFactory.decodeStream(imageURL.openConnection().getInputStream())
+                                            myView.ivPersonIcon.setImageBitmap(bmp)
+                                        }else{
+                                            myView.txtTweetUser.text = userInfo
+                                        }
+                                    }
+                                }catch (ex: Exception){}
+                            }
+                            override fun onCancelled(p0: DatabaseError) {
+                                TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+                            }
+                        })
+                    return myView
+                }
             }
         }
 
