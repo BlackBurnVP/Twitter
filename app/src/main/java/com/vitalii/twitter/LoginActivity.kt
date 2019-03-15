@@ -88,6 +88,7 @@ class LoginActivity : AppCompatActivity() {
 
                 myRef.child("Users").child(currentUser!!.uid).child("email").setValue(currentUser.email)
                 myRef.child("Users").child(currentUser!!.uid).child("ProfileImage").setValue(downloadUrl)
+                myRef.child("Users").child(currentUser!!.uid).child("LikedPosts").setValue("0")
             }
         }else{
             myRef.child("Users").child(currentUser!!.uid).child("email").setValue(currentUser.email)

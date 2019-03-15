@@ -88,7 +88,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         val defaultSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
         val notificationBuilder = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(R.drawable.persoicon)
-            .setContentTitle("FCM")
+            .setContentTitle("Twitter message")
             .setContentText(messageBody)
             .setAutoCancel(true)
             .setSound(defaultSoundUri)

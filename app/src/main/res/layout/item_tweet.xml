@@ -43,7 +43,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 app:srcCompat="@drawable/background"
-                android:id="@+id/ivTweetPic"/>
+                android:id="@+id/ivTweetPic" android:scaleType="fitXY"/>
         <LinearLayout
                 android:orientation="horizontal"
                 android:layout_width="match_parent"
@@ -55,6 +55,10 @@
                     app:srcCompat="@drawable/ic_favorite"
                     android:id="@+id/ivLike"
                     android:layout_weight="0"/>
+            <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="match_parent" android:id="@+id/txtLikeCount" android:layout_weight="0"
+                    android:textSize="18sp"/>
         </LinearLayout>
     </LinearLayout>
 </LinearLayout>

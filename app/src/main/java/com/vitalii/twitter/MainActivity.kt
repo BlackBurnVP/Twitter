@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.net.Uri
 import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
 import android.provider.MediaStore
@@ -30,8 +31,13 @@ import kotlin.collections.HashMap
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdView
 import com.google.android.gms.ads.MobileAds
+import com.google.android.gms.tasks.Continuation
+import com.google.android.gms.tasks.Task
 import com.google.firebase.messaging.FirebaseMessaging
+import com.google.firebase.storage.UploadTask
 import kotlinx.android.synthetic.main.ads_tweet.view.*
+import kotlinx.android.synthetic.main.item_tweet.*
+import com.squareup.picasso.Picasso
 
 
 class MainActivity : AppCompatActivity() {
@@ -57,21 +63,66 @@ class MainActivity : AppCompatActivity() {
 
         val bundle = intent.extras
         myEmail = bundle!!.getString("email")!!
-        myUID = bundle.getString("uid")
-        addTweets()
-        loadTweets()
-
+        myUID = bundle.getString("uid")!!
+        tweetsList.add(Tweet("0","Some tweet", "url", "add","0"))
         lvTweets.adapter = adapter
+        loadTweets()
     }
 
-    private fun addTweets(){
-        tweetsList.add(Tweet("Some tweet", "url", "add"))
+    fun splitString(str:String):String{
+        return str.split("@")[0]
+    }
+
+    fun idGenerator():String{
+        val date = Date()
+        return "${date.time}${splitString(myEmail)}"
     }
 
     private val PICK_IMAGE_CODE = 123
     fun loadImage(){
         val intent = Intent(Intent.ACTION_PICK,android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
         startActivityForResult(intent,PICK_IMAGE_CODE)
+    }
+
+    private var downloadURL:String = ""
+    private fun uploadImage(bitmap: Bitmap){
+        tweetsList.add(0, Tweet("","","","loading",""))
+        adapter.notifyDataSetChanged()
+        val df = SimpleDateFormat("ddMMyyHHmmss")
+        val imagePath = df.format(Date())+".jpg"
+        val imageRef = mStorageRef!!.child("imagePost/$imagePath")
+        val baos = ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.JPEG,100,baos)
+        val data = baos.toByteArray()
+        val uploadTask = imageRef.putBytes(data)
+
+        val urlTask = uploadTask.continueWithTask(Continuation<UploadTask.TaskSnapshot, Task<Uri>> { task ->
+            if (!task.isSuccessful) {
+                task.exception?.let {
+                    throw it
+                }
+            }
+            return@Continuation imageRef.downloadUrl
+        }).addOnCompleteListener { task ->
+            if (task.isSuccessful) {
+                downloadURL = task.result.toString()
+                tweetsList.removeAt(0)
+                adapter.notifyDataSetChanged()
+            } else {
+                // Handle failures
+                // ...
+            }
+        }
+
+//        uploadTask.addOnFailureListener{
+//
+//        }.addOnSuccessListener {taskSnapshot ->
+//
+//            //TODO Get download URL
+//            downloadURL = imageRef.downloadUrl.toString()
+//            tweetsList.removeAt(0)
+//            adapter.notifyDataSetChanged()
+//        }
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -88,40 +139,22 @@ class MainActivity : AppCompatActivity() {
         super.onActivityResult(requestCode, resultCode, data)
     }
 
-    private var downloadURL:String? = null
-    private fun uploadImage(bitmap: Bitmap){
-        tweetsList.add(0, Tweet("","","loading"))
-        adapter.notifyDataSetChanged()
-        val df = SimpleDateFormat("ddMMyyHHmmss")
-        val imagePath = df.format(Date())+".jpg"
-        val imageRef = mStorageRef!!.child("imagePost/$imagePath")
-        val baos = ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.JPEG,100,baos)
-        val data = baos.toByteArray()
-        val uploadTask = imageRef.putBytes(data)
-        uploadTask.addOnFailureListener{
-
-        }.addOnSuccessListener {taskSnapshot ->
-            downloadURL = imageRef.downloadUrl.toString()
-            tweetsList.removeAt(0)
-            adapter.notifyDataSetChanged()
-        }
-    }
-
     private fun loadTweets(){
         myRef.child("Posts")
             .addValueEventListener(object :ValueEventListener{
                 override fun onDataChange(dataSnapshot: DataSnapshot) {
                     try {
                         tweetsList.clear()
-                        tweetsList.add(Tweet("Some tweet", "url", "add"))
-                        tweetsList.add(Tweet("Some tweet", "url", "ads"))
+                        tweetsList.add(Tweet("Add", "url", "","add","0"))
+                        tweetsList.add(Tweet("Ads", "url", "","ads","0"))
                         val td = dataSnapshot.value as HashMap<String,Any>
                         for (key in td.keys){
                             var post = td[key] as HashMap<String,Any>
-                            tweetsList.add(Tweet(post["tweetText"].toString(),
+                            tweetsList.add(Tweet(key,
+                                post["tweetText"].toString(),
                                 post["tweetImageURL"].toString(),
-                                post["tweetPersonUID"].toString()))
+                                post["tweetPersonUID"].toString(),
+                                post["likesCount"].toString()))
                         }
                     adapter.notifyDataSetChanged()
                     }catch (ex:Exception){}
@@ -148,11 +181,12 @@ class MainActivity : AppCompatActivity() {
                     }
                     myView.ivPost.setOnClickListener {
                         val tweetText = edTweet.text.toString()
-                        if (downloadURL == null) {
+                        if (downloadURL == "") {
                             downloadURL = "No pic"
                         }
-                        myRef.child("Posts").push().setValue(Tweet(tweetText, downloadURL, myUID!!))
+                        myRef.child("Posts").child(idGenerator()).setValue(Tweet(idGenerator(),tweetText, downloadURL, myUID!!,"0"))
                         myView.edTweet.setText("")
+                        downloadURL = ""
                     }
                     return myView
                 }
@@ -173,11 +207,57 @@ class MainActivity : AppCompatActivity() {
                 else -> {
                     val myView = layoutInflater.inflate(R.layout.item_tweet,null)
                     myView.txtTweetBody.text = myTweet.tweetText
-                    if (myTweet.tweetImageURL!="No pic" && myTweet.tweetImageURL!!.isNotEmpty()){
+                    myView.txtLikeCount.text = myTweet.likesCount
+                    myRef.child("Users").child(myUID).child("LikedPosts")
+                        .addValueEventListener(object :ValueEventListener{
+                            override fun onCancelled(p0: DatabaseError) {
+                                TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+                            }
+
+                            override fun onDataChange(dataSnapshot: DataSnapshot) {
+                                val td = dataSnapshot.value.toString()
+                                    if (td.contains(myTweet.tweetID)){
+                                        myView.ivLike.setImageDrawable(resources.getDrawable(R.drawable.ic_favorite_true))
+                                    }
+                            }
+                        })
                         //TODO: Use Picasa for load from URL
-                        val imageURL = URL(myTweet.tweetImageURL)
-                        val bmp = BitmapFactory.decodeStream(imageURL.openConnection().getInputStream())
-                        myView.ivTweetPic.setImageBitmap(bmp)
+                        try {
+                            Picasso.get()
+                                .load(myTweet.tweetImageURL)
+                                .resize(myView.width,560)
+                                .into(myView.ivTweetPic)
+                        }catch (ex:Exception){
+                            println("Smth went wrong")
+                        }
+
+                    myView.ivLike.setOnClickListener{
+                        if (myView.ivLike.drawable.constantState == resources.getDrawable(R.drawable.ic_favorite_true).constantState){
+                            myRef.child("Posts").child(myTweet.tweetID).child("likesCount").setValue((myTweet.likesCount.toInt()-1).toString())
+                            myRef.child("Users").child(myUID).child("LikedPosts")
+                                .addValueEventListener(object:ValueEventListener{
+                                    override fun onDataChange(dataSnapshot: DataSnapshot) {
+                                        try {
+                                            val td = dataSnapshot.value as HashMap<String,Any>
+                                            for (key in td.keys){
+                                                val value = td[key]
+                                                if(value == myTweet.tweetID){
+                                                    myRef.child("Users").child(myUID).child("LikedPosts").child(key).removeValue()
+                                                    myView.ivLike.setImageDrawable(resources.getDrawable(R.drawable.ic_favorite))
+                                                    break
+                                                }
+                                            }
+                                        }catch (ex:Exception){}
+                                    }
+                                    override fun onCancelled(p0: DatabaseError) {}
+                                })
+
+//                            myView.ivLike.setImageDrawable(resources.getDrawable(R.drawable.ic_favorite))
+                        }else{
+                            myRef.child("Posts").child(myTweet.tweetID).child("likesCount").setValue((myTweet.likesCount.toInt()+1).toString())
+                            myRef.child("Users").child(myUID).child("LikedPosts").push().setValue(myTweet.tweetID)
+                            myView.ivLike.setImageDrawable(resources.getDrawable(R.drawable.ic_favorite_true))
+                        }
                     }
 
                     myRef.child("Users").child(myTweet.tweetPersonUID)
